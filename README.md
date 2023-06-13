@@ -36,5 +36,5 @@ PRIVATE_KEY=<private_key_content>
 
 ## Documentation
 
-![ScreenShot](https://i.ibb.co/p1sQTMs/Screenshot-42.png)
-![ScreenShot](https://i.ibb.co/jzsSXFW/Screenshot-43.png)
+![ScreenShot](https://i.ibb.co/ySBb0Ym/rot13-crypto.jpg)
+![ScreenShot](https://i.ibb.co/bshTNkP/rot13-crypto2.jpg)
