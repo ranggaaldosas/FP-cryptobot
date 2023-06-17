@@ -6,6 +6,8 @@ from Crypto.Util.Padding import pad, unpad
 import firebase_admin, time, telegram, os, codecs
 from dotenv import load_dotenv
 from firebase_admin import credentials, firestore
+from Crypto.Random import get_random_bytes
+
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -110,9 +112,14 @@ def save(update: Update, context: CallbackContext) -> None:
 
     if context.user_data['operation'] == 'encrypt':
         if context.user_data['algorithm'] == 'AES':
-            text = text.encode('utf-8')  # convert text to bytes only for AES
-            cipher = AES.new(aes_key.encode(), AES.MODE_CBC, aes_iv.encode())
-            encrypted_text = cipher.encrypt(pad(text, AES.block_size))  # pad text to be multiple of AES block size
+            text = text.encode('utf-8')
+            aes_key = get_random_bytes(32)  # generate a 256-bit (32-byte) random key
+            aes_iv = get_random_bytes(16)  # generate a 128-bit (16-byte) random IV
+            cipher = AES.new(aes_key, AES.MODE_CBC, aes_iv)
+            encrypted_text = cipher.encrypt(pad(text, AES.block_size))
+            context.user_data['aes_key'] = aes_key
+            context.user_data['aes_iv'] = aes_iv
+        
         elif context.user_data['algorithm'] == 'RSA':
             text = text.encode('utf-8')  # convert text to bytes only for RSA
             key = RSA.generate(2048)
@@ -120,7 +127,7 @@ def save(update: Update, context: CallbackContext) -> None:
             public_key = key.publickey().export_key()
             cipher_rsa = PKCS1_OAEP.new(RSA.import_key(public_key))
             encrypted_text = cipher_rsa.encrypt(text)
-            context.user_data['private_key'] = private_key
+            context.user_data['rsa_private_key'] = private_key
         elif context.user_data['algorithm'] == 'ROT13':  
             encrypted_text = codecs.encode(text, 'rot_13') 
 
@@ -136,13 +143,21 @@ def save(update: Update, context: CallbackContext) -> None:
         if doc.exists:
             encrypted_text = doc.to_dict().get('text')
             if context.user_data['algorithm'] == 'AES':
-                cipher = AES.new(aes_key.encode(), AES.MODE_CBC, aes_iv.encode())
-                decrypted_text = unpad(cipher.decrypt(encrypted_text), AES.block_size).decode('utf-8')
+                aes_key = context.user_data.get('aes_key')
+                aes_iv = context.user_data.get('aes_iv')
+                if aes_key and aes_iv:
+                    cipher = AES.new(aes_key, AES.MODE_CBC, aes_iv)
+                    decrypted_text = unpad(cipher.decrypt(encrypted_text), AES.block_size).decode('utf-8')
+                else:
+                    update.message.reply_text('No AES key and IV found for decryption')
+                    return
+            
             elif context.user_data['algorithm'] == 'RSA':
-                private_key = context.user_data.get('private_key')
+                private_key = context.user_data.get('rsa_private_key')
                 if private_key:
-                    cipher_rsa = PKCS1_OAEP.new(RSA.import_key(private_key))
-                    decrypted_text = cipher_rsa.decrypt(encrypted_text)
+                    cipher_rsa = PKCS1_OAEP.new(RSA.import_key  (private_key))
+                    decrypted_bytes = cipher_rsa.decrypt(encrypted_text)
+                    decrypted_text = decrypted_bytes.decode('utf-8')
                 else:
                     update.message.reply_text('No private key found for RSA decryption')
                     return
